@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Ops Assistant · 运维故障助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <style>
+        body { background: #0f172a; color: #e2e8f0; }
+        .log-input { font-family: 'Cascadia Code', 'Fira Code', monospace; }
+        .cmd-box { transition: all 0.15s ease; }
+        .cmd-box:hover { border-color: #38bdf8; }
+        .risk-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .risk-safe   { background: #22c55e; }
+        .risk-warning { background: #eab308; }
+        .risk-danger  { background: #ef4444; }
+        .risk-info    { background: #64748b; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        .spinner { border: 3px solid #1e293b; border-top: 3px solid #38bdf8; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .toast { position: fixed; bottom: 24px; right: 24px; z-index: 100; transition: all 0.3s; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<div class="max-w-6xl mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-robot text-sky-400"></i>
+                AI Ops Assistant
+            </h1>
+            <p class="text-slate-400 text-sm mt-1">粘贴 Linux / Docker / Nginx 报错日志 · AI 自动分析</p>
+        </div>
+        <span class="text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full">v0.1</span>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- 左侧：输入区 -->
+        <div class="lg:col-span-2 space-y-4">
+            <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">
+                <label class="block text-sm font-medium text-slate-300 mb-2">
+                    <i class="fa-solid fa-terminal mr-1 text-sky-400"></i>
+                    粘贴报错日志
+                </label>
+                <textarea id="logInput"
+                    class="log-input w-full h-44 bg-slate-900 border border-slate-600 rounded-lg p-4 text-sm resize-y
+                           focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 transition"
+                    placeholder="例如：&#10;Error response from daemon: driver failed programming external connectivity on container...&#10;&#10;或者直接描述问题：&#10;nginx 502 bad gateway，后端是 Java 服务监听 8080 端口..."></textarea>
+                <div class="flex items-center justify-between mt-3">
+                    <div class="flex gap-2">
+                        <button onclick="clearInput()"
+                            class="text-xs text-slate-400 hover:text-white transition px-3 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700">
+                            <i class="fa-regular fa-trash-can mr-1"></i>清空
+                        </button>
+                        <button onclick="loadExample()"
+                            class="text-xs text-slate-400 hover:text-white transition px-3 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700">
+                            <i class="fa-regular fa-file-lines mr-1"></i>示例
+                        </button>
+                    </div>
+                    <button id="analyzeBtn" onclick="analyze()"
+                        class="bg-sky-500 hover:bg-sky-400 text-slate-900 font-semibold px-6 py-2 rounded-lg
+                               transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>分析</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 结果区 -->
+            <div id="resultArea" class="hidden space-y-4 fade-in">
+                <!-- 头部 -->
+                <div id="resultHeader" class="bg-slate-800/60 border border-slate-700 rounded-xl p-5"></div>
+                <!-- 排查命令 -->
+                <div id="commandsCard" class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 hidden"></div>
+                <!-- 解决方案 -->
+                <div id="solutionCard" class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 hidden"></div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div id="loading" class="hidden flex items-center gap-3 text-slate-400 text-sm p-4">
+                <div class="spinner"></div>
+                <span>AI 正在分析日志...</span>
+            </div>
+        </div>
+
+        <!-- 右侧：历史记录 -->
+        <div class="lg:col-span-1">
+            <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                        <i class="fa-regular fa-clock"></i>
+                        历史记录
+                    </h2>
+                    <button onclick="loadHistory()" class="text-xs text-slate-500 hover:text-white transition" title="刷新">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+                <div id="historyList" class="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                    <div class="text-center text-slate-500 text-sm py-8">
+                        <i class="fa-regular fa-circle-question block text-2xl mb-2"></i>
+                        暂无记录
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm shadow-xl"></div>
+
+<script>
+    // ─── 加载历史记录 ─────────────────────────────────────────────
+    async function loadHistory() {
+        const el = document.getElementById('historyList');
+        try {
+            const res = await fetch('/api/history?page=1&size=30');
+            const data = await res.json();
+            if (!data.items || data.items.length === 0) {
+                el.innerHTML = `<div class="text-center text-slate-500 text-sm py-8">
+                    <i class="fa-regular fa-circle-question block text-2xl mb-2"></i>暂无记录</div>`;
+                return;
+            }
+            el.innerHTML = data.items.map(item => {
+                const riskColors = { safe: 'text-green-400', info: 'text-slate-400', warning: 'text-yellow-400', danger: 'text-red-400' };
+                return `<div onclick="loadRecord(${item.id})"
+                    class="bg-slate-700/40 hover:bg-slate-700/70 rounded-lg px-3 py-2.5 cursor-pointer transition text-sm"
+                    title="${escapeHtml(item.log_input)}">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs ${riskColors[item.risk_level] || 'text-slate-400'} font-medium">${escapeHtml(item.fault_type)}</span>
+                    </div>
+                    <p class="text-slate-400 text-xs truncate mt-1">${escapeHtml(item.log_input)}</p>
+                    <p class="text-slate-500 text-[10px] mt-1">${item.created_at}</p>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            el.innerHTML = `<div class="text-center text-red-400 text-sm py-4">加载失败</div>`;
+        }
+    }
+
+    // ─── 加载单条记录 ─────────────────────────────────────────────
+    async function loadRecord(id) {
+        try {
+            const res = await fetch(`/api/history/${id}`);
+            const data = await res.json();
+            renderResult(data);
+            document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) {
+            showToast('加载记录失败');
+        }
+    }
+
+    // ─── 分析 ────────────────────────────────────────────────────
+    async function analyze() {
+        const input = document.getElementById('logInput').value.trim();
+        if (!input) {
+            showToast('请先输入报错日志');
+            return;
+        }
+        const btn = document.getElementById('analyzeBtn');
+        const loading = document.getElementById('loading');
+        btn.disabled = true;
+        loading.classList.remove('hidden');
+        document.getElementById('resultArea').classList.add('hidden');
+
+        try {
+            const res = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ log: input }),
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                showToast(err.detail || '分析失败');
+                return;
+            }
+            const data = await res.json();
+            renderResult(data);
+            document.getElementById('resultArea').classList.remove('hidden');
+            loadHistory();
+        } catch (e) {
+            showToast('网络错误，请检查服务是否在运行');
+        } finally {
+            btn.disabled = false;
+            loading.classList.add('hidden');
+        }
+    }
+
+    // ─── 渲染结果 ─────────────────────────────────────────────────
+    function renderResult(data) {
+        const riskLabels = { safe: '安全', info: '提示', warning: '警告', danger: '危险' };
+        const riskColors = { safe: 'text-green-400 bg-green-500/10 border-green-500/30',
+            info: 'text-slate-300 bg-slate-500/10 border-slate-500/30',
+            warning: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+            danger: 'text-red-400 bg-red-500/10 border-red-500/30' };
+
+        // 头部
+        document.getElementById('resultHeader').innerHTML = `
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="px-2 py-0.5 text-xs rounded-full border font-medium
+                            ${riskColors[data.risk_level] || riskColors.info}">
+                            ${riskLabels[data.risk_level] || '提示'}
+                        </span>
+                        <span class="text-lg font-bold">${escapeHtml(data.fault_type)}</span>
+                    </div>
+                    <p class="text-slate-400 text-sm mt-2">${escapeHtml(data.cause)}</p>
+                </div>
+                <span class="text-xs text-slate-500 whitespace-nowrap">${data.created_at}</span>
+            </div>
+        `;
+
+        // 排查命令
+        const cmdCard = document.getElementById('commandsCard');
+        if (data.commands && data.commands.length > 0) {
+            cmdCard.classList.remove('hidden');
+            cmdCard.innerHTML = `
+                <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-sky-400"></i>排查命令
+                </h3>
+                <div class="space-y-2">
+                    ${data.commands.map(c => {
+                        const riskDot = c.risk === 'safe' ? 'risk-safe' : c.risk === 'warning' ? 'risk-warning' : c.risk === 'danger' ? 'risk-danger' : 'risk-info';
+                        return `<div class="cmd-box bg-slate-900/80 border border-slate-600/50 rounded-lg p-3">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs text-slate-400">${escapeHtml(c.desc)}</span>
+                                <span class="flex items-center text-[10px] text-slate-500">
+                                    <span class="${riskDot}"></span>${c.risk || 'info'}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <code class="log-input text-sm text-green-300 flex-1 overflow-x-auto">${escapeHtml(c.cmd)}</code>
+                                <button onclick="copyCmd(this)" data-cmd="${escapeHtml(c.cmd)}"
+                                    class="text-slate-500 hover:text-sky-400 transition shrink-0 text-xs" title="复制">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            `;
+        } else {
+            cmdCard.classList.add('hidden');
+        }
+
+        // 解决方案
+        const solCard = document.getElementById('solutionCard');
+        solCard.classList.remove('hidden');
+        solCard.innerHTML = `
+            <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-wrench text-sky-400"></i>解决方案
+            </h3>
+            <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(data.solution)}</p>
+        `;
+    }
+
+    // ─── 复制命令 ─────────────────────────────────────────────────
+    function copyCmd(btn) {
+        const cmd = btn.getAttribute('data-cmd');
+        navigator.clipboard.writeText(cmd).then(() => {
+            btn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
+            setTimeout(() => btn.innerHTML = '<i class="fa-regular fa-copy"></i>', 1500);
+        }).catch(() => {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = cmd;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            btn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
+            setTimeout(() => btn.innerHTML = '<i class="fa-regular fa-copy"></i>', 1500);
+        });
+    }
+
+    // ─── 工具函数 ─────────────────────────────────────────────────
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => el.classList.add('hidden'), 3000);
+    }
+
+    function clearInput() {
+        document.getElementById('logInput').value = '';
+        document.getElementById('resultArea').classList.add('hidden');
+    }
+
+    function loadExample() {
+        document.getElementById('logInput').value =
+`Error response from daemon: driver failed programming external connectivity on endpoint my_app (abc123):
+Bind for 0.0.0.0:8080 failed: port is already allocated`;
+    }
+
+    // ─── 初始化 ───────────────────────────────────────────────────
+    loadHistory();
+
+    // Ctrl+Enter 快速提交
+    document.getElementById('logInput').addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') analyze();
+    });
+</script>
+
+</body>
+</html>
