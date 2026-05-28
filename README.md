@@ -26,17 +26,28 @@
 git clone https://github.com/MartaBanion/ai-ops-assistant.git
 cd ai-ops-assistant
 ```
-创建仓库
+
+**创建仓库**
+
+```bash
 python3 -m venv venv
-运行环境
+```
+
+**运行环境**
+
+```bash
 source venv/bin/activate
+```
 
 ### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
+
 更新后再从使用
+
+```
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 sqlalchemy>=2.0.0
@@ -44,6 +55,7 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 aiofiles>=23.0.0
+```
 
 ### 3. 配置 API Key
 
@@ -80,30 +92,30 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### API 接口
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/api/analyze` | 分析报错日志 |
-| `GET` | `/api/history` | 获取历史记录（支持分页） |
-| `GET` | `/api/history/{id}` | 获取单条记录详情 |
-| `GET` | `/api/health` | 健康检查 |
+| 方法   | 路径                | 说明                         |
+|--------|---------------------|------------------------------|
+| POST   | `/api/analyze`      | 分析报错日志                 |
+| GET    | `/api/history`      | 获取历史记录（支持分页）     |
+| GET    | `/api/history/{id}` | 获取单条记录详情             |
+| GET    | `/api/health`       | 健康检查                     |
 
 ## 本地知识库
 
 项目内置了以下常见故障的本地知识库，匹配关键词即可秒级响应：
 
-| 故障类型 | 风险等级 |
-|----------|----------|
-| 服务未启动 / 端口未监听 | ⚠️ warning |
-| 磁盘空间已满 | 🔴 danger |
-| 权限不足 | ⚠️ warning |
-| Docker 未安装 | ℹ️ info |
-| Docker 容器异常退出 | ⚠️ warning |
-| Nginx 网关错误 (502/504) | 🔴 danger |
-| 资源不存在或路径错误 | ℹ️ info |
-| 内存不足 (OOM) | 🔴 danger |
-| 端口冲突 | ℹ️ info |
-| Kubernetes Pod 反复重启 | ⚠️ warning |
-| Kubernetes 镜像拉取失败 | ⚠️ warning |
+| 故障类型                     | 风险等级     |
+|------------------------------|--------------|
+| 服务未启动 / 端口未监听      | ⚠️ warning   |
+| 磁盘空间已满                 | 🔴 danger    |
+| 权限不足                     | ⚠️ warning   |
+| Docker 未安装                | ℹ️ info      |
+| Docker 容器异常退出          | ⚠️ warning   |
+| Nginx 网关错误 (502/504)    | 🔴 danger    |
+| 资源不存在或路径错误         | ℹ️ info      |
+| 内存不足 (OOM)               | 🔴 danger    |
+| 端口冲突                     | ℹ️ info      |
+| Kubernetes Pod 反复重启      | ⚠️ warning   |
+| Kubernetes 镜像拉取失败      | ⚠️ warning   |
 
 ## 技术栈
 
