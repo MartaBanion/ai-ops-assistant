@@ -26,12 +26,24 @@
 git clone https://github.com/MartaBanion/ai-ops-assistant.git
 cd ai-ops-assistant
 ```
+创建仓库
+python3 -m venv venv
+运行环境
+source venv/bin/activate
 
 ### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
+更新后再从使用
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+sqlalchemy>=2.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+aiofiles>=23.0.0
 
 ### 3. 配置 API Key
 
